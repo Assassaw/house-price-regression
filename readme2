@@ -1,0 +1,18 @@
+train["SalePrice"] = np.log1p(train["SalePrice"])
+all_data = pd.concat([train.drop("SalePrice", axis=1), test], axis=0)
+
+all_data["TotalSF"] = all_data["TotalBsmtSF"] + all_data["1stFlrSF"] + all_data["2ndFlrSF"]
+all_data["Age"] = all_data["YrSold"] - all_data["YearBuilt"]
+all_data["RemodAge"] = all_data["YrSold"] - all_data["YearRemodAdd"]
+
+num_cols = all_data.select_dtypes(include=[np.number]).columns
+cat_cols = all_data.select_dtypes(include=["object"]).columns
+
+all_data[num_cols] = all_data[num_cols].fillna(all_data[num_cols].median())
+all_data[cat_cols] = all_data[cat_cols].fillna("Missing")
+
+all_data = pd.get_dummies(all_data, columns=cat_cols, drop_first=True)
+
+X_train = all_data[:train.shape[0]]
+X_test = all_data[train.shape[0]:]
+y_train = train["SalePrice"]
