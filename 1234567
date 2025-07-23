@@ -1,0 +1,84 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.linear_model import RidgeCV
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error
+import os
+
+base_path = "C:/Users/Astevenson/Downloads/house-prices-advanced-regression-techniques"
+train_path = os.path.join(base_path, "train.csv")
+test_path = os.path.join(base_path, "test.csv")
+submission_path = os.path.join(base_path, "submission_ridge.csv")
+
+train = pd.read_csv(train_path)
+test = pd.read_csv(test_path)
+train["SalePrice"] = np.log1p(train["SalePrice"])
+
+all_data = pd.concat([train.drop("SalePrice", axis=1), test], axis=0)
+all_data["TotalSF"] = all_data["TotalBsmtSF"] + all_data["1stFlrSF"] + all_data["2ndFlrSF"]
+all_data["Age"] = all_data["YrSold"] - all_data["YearBuilt"]
+all_data["RemodAge"] = all_data["YrSold"] - all_data["YearRemodAdd"]
+
+num_cols = all_data.select_dtypes(include=[np.number]).columns
+cat_cols = all_data.select_dtypes(include=["object"]).columns
+
+all_data[num_cols] = all_data[num_cols].fillna(all_data[num_cols].median())
+all_data[cat_cols] = all_data[cat_cols].fillna("Missing")
+all_data = pd.get_dummies(all_data, columns=cat_cols, drop_first=True)
+
+X_train = all_data[:train.shape[0]]
+X_test = all_data[train.shape[0]:]
+y_train = train["SalePrice"]
+
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+alphas = [0.01, 0.1, 1.0, 10.0, 100.0]
+ridge = RidgeCV(alphas=alphas, scoring="neg_mean_squared_error", cv=10)
+ridge.fit(X_train_scaled, y_train)
+
+train_preds = ridge.predict(X_train_scaled)
+rmse = np.sqrt(mean_squared_error(y_train, train_preds))
+print("Train RMSE (log):", round(rmse, 4))
+print("Best Alpha:", ridge.alpha_)
+
+test_preds = np.expm1(ridge.predict(X_test_scaled))
+submission = pd.DataFrame({"Id": test["Id"], "SalePrice": test_preds})
+submission.to_csv(submission_path, index=False)
+print("Submission saved to:", submission_path)
+
+coef_df = pd.Series(ridge.coef_, index=X_train.columns)
+top_features = coef_df.abs().sort_values(ascending=False).head(20)
+
+print("Top Weighted Features:")
+for feature in top_features.index:
+    weight = round(coef_df[feature], 4)
+    print(feature, "=", weight)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=top_features.values, y=top_features.index)
+plt.title("Top 20 Most Influential Features on Sale Price")
+plt.xlabel("Weight (Coefficient Value)")
+plt.ylabel("Feature")
+plt.tight_layout()
+plt.show()
+
+corr_df = train.copy()
+corr_df["TotalSF"] = all_data.loc[:train.shape[0]-1, "TotalSF"]
+corr_df["Age"] = all_data.loc[:train.shape[0]-1, "Age"]
+corr_df["RemodAge"] = all_data.loc[:train.shape[0]-1, "RemodAge"]
+
+top_corr = corr_df.corr()["SalePrice"].abs().sort_values(ascending=False).head(20)
+print("Top Correlated Variables with SalePrice:")
+print(top_corr)
+
+plt.figure(figsize=(10, 6))
+sns.barplot(x=top_corr.values, y=top_corr.index)
+plt.title("Top 20 Correlations with SalePrice")
+plt.xlabel("Correlation Coefficient")
+plt.tight_layout()
+plt.show()
