@@ -1,0 +1,20 @@
+print("Predict Your House Price")
+print("Answer the following questions to estimate your house's value")
+
+user_input = {}
+for feature in selected_features:
+    try:
+        example_val = round(X_train[feature].median(), 2)
+        prompt = feature + " (" + friendly_names[feature] + "). Example: " + str(example_val) + " → "
+        val = float(input(prompt))
+        user_input[feature] = val
+    except:
+        user_input[feature] = example_val
+        print("Invalid input. Using default:", example_val)
+
+input_df = pd.DataFrame([user_input])
+input_df_full = X_train[selected_features].copy()
+input_df_scaled = scaler.fit(input_df_full).transform(input_df[selected_features])
+input_prediction = np.expm1(ridge.predict(input_df_scaled))[0]
+
+print("Estimated Sale Price: $", round(input_prediction, 2))
